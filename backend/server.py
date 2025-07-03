@@ -52,8 +52,14 @@ client = MongoClient(MONGO_URL)
 db = client[DB_NAME]
 fs = gridfs.GridFS(db)
 
-# Initialize Groq client
-groq_client = Groq(api_key=GROQ_API_KEY)
+# Initialize Groq client with fallback
+try:
+    groq_client = Groq(api_key=GROQ_API_KEY)
+except TypeError:
+    # Handle older versions of the Groq client
+    logger.warning("Using alternative Groq client initialization due to version compatibility")
+    from groq._client import Groq as GroqClient
+    groq_client = GroqClient(api_key=GROQ_API_KEY)
 
 # Simple embedding function instead of using SentenceTransformer
 def get_embedding(text):
