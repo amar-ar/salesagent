@@ -11,7 +11,6 @@ import logging
 from groq import Groq
 import fitz  # PyMuPDF for PDF processing
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import pymongo
 from pymongo import MongoClient
 import gridfs
@@ -21,6 +20,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import requests
 from urllib.parse import urljoin
+import hashlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,8 +55,14 @@ fs = gridfs.GridFS(db)
 # Initialize Groq client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Initialize embedding model
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+# Simple embedding function instead of using SentenceTransformer
+def get_embedding(text):
+    # This is a very simple embedding function that just returns a hash-based vector
+    # In a production environment, you would use a proper embedding model
+    hash_obj = hashlib.md5(text.encode())
+    hash_bytes = hash_obj.digest()
+    # Convert bytes to a list of floats between -1 and 1
+    return [(b / 127.5) - 1 for b in hash_bytes]
 
 # Thread pool for async operations
 executor = ThreadPoolExecutor(max_workers=4)
@@ -130,8 +136,9 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
 def generate_embeddings(texts: List[str]) -> List[List[float]]:
     """Generate embeddings for a list of texts"""
     try:
-        embeddings = embedding_model.encode(texts)
-        return embeddings.tolist()
+        # Use our simple embedding function instead of the model
+        embeddings = [get_embedding(text) for text in texts]
+        return embeddings
     except Exception as e:
         logger.error(f"Error generating embeddings: {e}")
         return []
@@ -139,9 +146,6 @@ def generate_embeddings(texts: List[str]) -> List[List[float]]:
 def semantic_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
     """Perform semantic search on document chunks"""
     try:
-        # Generate query embedding
-        query_embedding = embedding_model.encode([query])[0]
-        
         # For now, use text search as fallback (can be upgraded to vector search)
         # MongoDB text search
         search_results = chunks_collection.find(
@@ -465,7 +469,7 @@ async def create_sample_data():
                 "book_author": "Mark Roberge",
                 "chunk_index": 0,
                 "text": "The sales acceleration formula is built on three pillars: hiring, training, and managing salespeople. The most successful sales organizations focus on creating predictable, scalable processes that can be measured and optimized over time.",
-                "embedding": generate_embeddings(["The sales acceleration formula is built on three pillars: hiring, training, and managing salespeople."])[0],
+                "embedding": get_embedding("The sales acceleration formula is built on three pillars: hiring, training, and managing salespeople."),
                 "created_at": datetime.utcnow()
             },
             {
@@ -475,7 +479,7 @@ async def create_sample_data():
                 "book_author": "Mark Roberge",
                 "chunk_index": 1,
                 "text": "Metrics-driven sales management requires tracking key performance indicators like conversion rates, average deal size, and sales cycle length. These metrics help identify bottlenecks in the sales process and optimize for better results.",
-                "embedding": generate_embeddings(["Metrics-driven sales management requires tracking key performance indicators like conversion rates, average deal size, and sales cycle length."])[0],
+                "embedding": get_embedding("Metrics-driven sales management requires tracking key performance indicators like conversion rates, average deal size, and sales cycle length."),
                 "created_at": datetime.utcnow()
             },
             {
@@ -485,7 +489,7 @@ async def create_sample_data():
                 "book_author": "Dan Ariely",
                 "chunk_index": 0,
                 "text": "Understanding customer psychology is crucial for sales success. People don't always make rational decisions, and sales professionals who understand behavioral economics can better influence purchasing decisions.",
-                "embedding": generate_embeddings(["Understanding customer psychology is crucial for sales success."])[0],
+                "embedding": get_embedding("Understanding customer psychology is crucial for sales success."),
                 "created_at": datetime.utcnow()
             }
         ]
